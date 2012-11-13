@@ -1,0 +1,19 @@
+#lang racket
+(require "env.ss")
+(require eopl)
+
+;;expressible-value?: any? ->boolean?
+;; this is used for checking the values whether it is expressible or not.
+(define expressible-value?
+  (lambda (a)
+        ((or number? boolean? proc?) a)))
+
+;;denotable-value?: any? ->boolean?
+;; this is used for checking the values whether it is denotable or not.
+(define denotable-value?
+  (lambda (a)
+       ((or number? boolean? proc?) a)))
+
+;; test cases for checkinbg the above functions.
+;(expressible-value? 5)
+;(denotable-value? 5)

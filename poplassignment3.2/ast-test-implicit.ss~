@@ -1,0 +1,14 @@
+#lang racket
+(require rackunit "ast.ss" "parse.ss" "eval-ast.ss" "env.ss" "semantic-domain.ss")
+
+;;unit testing for ast
+(check-equal? (ast? (num-ast 5)) #t "number test")
+(check-pred ast? (bool-ast #t) "boolean test")
+(check-true (ast? (app-ast (id-ref-ast '+) (list (num-ast 5) (num-ast 6)))) "app-ast test")
+(check-true (ast? (if-ast (bool-ast #t) (num-ast 5) (num-ast 6))) "if-ast test")
+(check-true (ast? (id-ref-ast 'x)) "id-ref test")
+(check-true (ast? (let-ast (list (bind 'x (num-ast 5))) (app-ast (id-ref-ast '+) (list (num-ast 5) (id-ref-ast 'x))))) "let-ast test")
+(check-true (ast? (fn-ast (list 'x) (app-ast (id-ref-ast '+) (list (num-ast 5) (id-ref-ast 'x))))) "fn-ast test")
+(check-true (ast? (app-ast (id-ref-ast '+) (list (num-ast 5) (id-ref-ast 'x)))) "app-ast test")
+(check-true (ast? (seq-ast (list (app-ast (id-ref-ast '+) (list (num-ast 5) (id-ref-ast 'x))) (num-ast 5)))) "seq-ast test")
+;(check-true (ast? (set-ast (id-ref-ast 'x) (num-ast 5))) "num-ast test")

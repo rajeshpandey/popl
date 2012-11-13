@@ -1,0 +1,44 @@
+#lang racket
+(provide (all-defined-out))
+(require eopl "semantic-domain.ss")
+
+(define store? 
+  (list-of storable-value?))
+
+;;ref?: store? ->nat? -> boolean?
+(define ref?
+  (lambda(s i)
+    (and (number? i) (< i (length s)))))
+
+(define new-ref
+  (lambda(s v)
+   (list (cons v s) (length s))
+    )
+  )
+
+(define deref
+  (lambda (s r)
+    (cond
+      [(and (ref? s r)) (let ([n (- (length s) r 1)]) (list-ref s n))]
+      [(error("Error: deref. not a valid refernce in store(out of range) "))])
+    )
+  )
+
+(define set-ref
+  (lambda (s r v)
+    (cond
+      [(and (ref? s r))(let ([n (- (length s) r 1)]) (replace s n v))]
+      [ (error("Error: set-ref "))])))
+
+(define replace
+  (lambda (s i v)
+    (cond
+      [(zero? i)(cons v (rest s))]
+      [ (cons (first s) ( replace s (- i 1) (rest s)))])))
+
+;(define s '())
+;(define s1 (new-ref s 5))
+;(define s2 (new-ref (first s1) 10))
+;(deref (first s2) 1)
+;(deref (first s2) 0)
+;(set-ref (first s2) 1 12)

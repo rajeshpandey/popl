@@ -1,0 +1,91 @@
+#lang racket
+(require rackunit "ast.ss" "parse.ss" "eval-ast.ss" "env.ss")
+
+;;unit testing for ast
+;;######################################################################################################################
+(check-equal? (ast? (num-ast 5)) #t "number test")
+(check-pred ast? (bool-ast #t) "boolean test")
+(check-true (ast? (id-ref-ast 'x)) "id test")
+(check-true (ast? (let-ast (list (bind 'x (num-ast 5))) (app-ast (id-ref-ast '+) (list (num-ast 5) (id-ref-ast 'x))))) "let-ast test")
+(check-true (ast? (fn-ast (list 'x) (app-ast (id-ref-ast '+) (list (num-ast 5) (id-ref-ast 'x))))) "fn-ast test")
+(check-true (ast? (app-ast (id-ref-ast '+) (list (num-ast 5) (num-ast 6)))) "app test")
+(check-true (ast? (if-ast (bool-ast #t) (num-ast 5) (num-ast 6))) "if-ast test")
+(check-true (ast? (app-ast (id-ref-ast '+) (list (num-ast 5) (id-ref-ast 'x)))) "app-ast test")
+
+
+(define-simple-check (check-ast? thing)
+   (ast? thing))
+(check-ast? (num-ast 8))
+;; this check, when run will fail.
+;;; (check-equal? (ast? 5) #t "num-ast test")
+
+;; ######################################################################################################################
+;;; Failure tests
+(check-exn exn? (lambda () (num-ast #t)) "number-test:invalid argument ")
+(check-exn exn? (lambda () (bool-ast 'x)) "bool-ast-test:invalid argument")
+(check-exn exn? (lambda () (id-ref-ast 5)) "ed-ref-ast-test: invalid arguments")
+(check-exn exn? (lambda () (app-ast '+ (list (num-ast 5) (num-ast 6)))) "ed-ref-ast-test: invalid arguments")
+(check-exn exn? (lambda () (fix-ast (list (fbind (list 'fname '(x) (app-ast (id-ref-ast '+) (list (num-ast 2) (id-ref-ast 'x))))))) (list (num-ast 5) (num-ast 6))) "fix: no body present")
+(check-exn exn? (lambda () (eval-ast (and-ast (bool-ast #t) (bool-ast #t)))) "and-ast-test: eval-ast can't parse and-ast")
+(check-exn exn? (lambda () (eval-ast (cond-ast (list (clause (bool-ast #t) (num-ast 5)))))) "cond-ast-test: eval-ast can't parse cond-ast")
+
+;;########################################################################################################################
+;;; the app-ast ast builder  doesn't do type checking
+(check-equal? (ast? (app-ast (id-ref-ast '+) (list (num-ast 5) (bool-ast #t)))) #t "app-ast test2")
+(check-equal? (ast? (if-ast (bool-ast #t) (num-ast 5) (num-ast 6))) #t "if-app test3")
+
+;;######################################################################################################################
+;;unit testing for parse
+(check-equal? (num-ast 5)   (parse 5) "parse5")
+(check-equal? (bool-ast #t) (parse #t) "parse#t")
+(check-equal? (id-ref-ast 'sym) (parse 'sym) "parse 'sym")
+(check-equal? (if-ast (bool-ast #t) (bool-ast #f) (bool-ast #t)) (parse '(if #t #f #t)) "if-app error")
+(check-equal? (translate-ast (let-ast (list (bind 'x (num-ast 5))) (app-ast (id-ref-ast '+) (list (num-ast 2) (id-ref-ast 'x)))))
+              (parse '(let ([x 5]) (+ 2 x))) "let-ast test")
+(check-equal? (translate-ast (let-ast (list (bind 'x (num-ast 5))) (app-ast (id-ref-ast '+) (list (num-ast 2) (id-ref-ast 'x)))))
+              (parse '((fn (x) (+ 2 x)) 5)) "let-fn-test")
+(check-equal? (fn-ast (list 'x) (app-ast (id-ref-ast '+) (list (num-ast 2) (id-ref-ast 'x))))
+              (parse '(fn (x) (+ 2 x))) "function test")
+(check-equal? (app-ast (id-ref-ast '+) (list (num-ast 3)))
+              (parse '(+ 3)) "parse+")
+(check-equal? (app-ast (id-ref-ast '/) (list (num-ast 3) (bool-ast #t)))
+              (parse '(/ 3 #t)) "parse/")
+(check-equal? (parse '(fix ([(! n) (cond [(0? n) 1] [else (* n (! (sub1 n)))])]) (! 3)))
+              (fix-ast (list
+                        (fbind
+                         '!
+                         '(n)
+                         (if-ast
+                          (app-ast (id-ref-ast '0?) (list (id-ref-ast 'n)))
+                          (num-ast 1)
+                          (app-ast
+                           (id-ref-ast '*)
+                           (list (id-ref-ast 'n) (app-ast (id-ref-ast '!) (list (app-ast (id-ref-ast 'sub1) (list (id-ref-ast 'n))))))))))
+                       (app-ast (id-ref-ast '!) (list (num-ast 3)))))
+(check-equal? (parse '(and #t #t #t))
+              (if-ast (bool-ast #t) (if-ast (bool-ast #t) (if-ast (bool-ast #t) (bool-ast #t) (bool-ast #f)) (bool-ast #f)) (bool-ast #f))
+              "and-test -- and has been translated to if-ast")
+
+
+;;######################################################################################################################
+;; all the below mentioned test cases may be written using eval-ast as well.
+;;unit testing for run
+(check-equal? (run 5 init-env) 5 "number test")
+(check-equal? (run #t init-env) #t "boolean test")
+
+(check-equal? (run '(+ 5 7) init-env) 12 "eval-ast: app-ast-test")
+(check-equal? (run '(let ([x 5]) (+ 2 x)) init-env) 7 "let-ast test")
+(check-equal? (run '((fn (x) (+ 2 x)) 5) init-env) 7 "function and app test")
+(check-equal? (run '(fix ([(! n) (if (= 0 n) 1 (* n (! (- n 1))))]) (! 6)) init-env) 720 "recursion test")
+(check-equal? (run '(and #t #t #t) init-env) #t "and test")
+(check-equal? (run '(or #f #t #t) init-env) #t "or test")
+
+;;######################################################################################################################
+;; unit testing for exceptions in run
+(check-exn exn? (lambda () (run '(if 4 5 6) init-env)) "if-app-test: invalid arguments to constructor if-ast")
+(check-exn exn? (lambda () (run '($ 5 7) init-env)) "run: incorrect-operator")
+(check-exn exn? (lambda () (run '(/ 5 0) init-env)) "/: division by 0")
+(check-exn exn? (lambda () (run '(let ([x 5]) (+ 2 y)) init-env) "error in let. y is not defined in the environment"))
+(check-exn exn? (lambda () (run '(and 5 #t) init-env)) "and: invalid type of arguments")
+(check-exn exn? (lambda () (run '(or 5 #t) init-env)) "or: invalid type of arguments")
+(check-exn exn? (lambda () (run '(cond [5 6]) init-env)) "cond: invalid type of arguments") 
